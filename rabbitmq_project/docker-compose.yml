@@ -1,0 +1,191 @@
+version: '3.8'
+
+services:
+  # RabbitMQ Node 1 (Primary)
+  rabbitmq1:
+    image: rabbitmq:3.12-management
+    hostname: rabbitmq1
+    container_name: rabbitmq1
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+      - "15692:15692" # Prometheus metrics
+    volumes:
+      - rabbitmq1_data:/var/lib/rabbitmq
+      - ./rabbitmq_enabled_plugins:/etc/rabbitmq/enabled_plugins
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=DISTRIBUTED_RABBITMQ_COOKIE
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    networks:
+      - rabbitmq_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Node 2
+  rabbitmq2:
+    image: rabbitmq:3.12-management
+    hostname: rabbitmq2
+    container_name: rabbitmq2
+    ports:
+      - "5673:5672"   # AMQP port
+      - "15673:15672" # Management UI
+    volumes:
+      - rabbitmq2_data:/var/lib/rabbitmq
+      - ./rabbitmq_enabled_plugins:/etc/rabbitmq/enabled_plugins
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=DISTRIBUTED_RABBITMQ_COOKIE
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - rabbitmq1
+    command: >
+      bash -c "
+        sleep 10;
+        rabbitmq-server &
+        sleep 10;
+        rabbitmqctl stop_app;
+        rabbitmqctl reset;
+        rabbitmqctl join_cluster rabbit@rabbitmq1;
+        rabbitmqctl start_app;
+        tail -f /dev/null
+      "
+
+  # RabbitMQ Node 3
+  rabbitmq3:
+    image: rabbitmq:3.12-management
+    hostname: rabbitmq3
+    container_name: rabbitmq3
+    ports:
+      - "5674:5672"   # AMQP port
+      - "15674:15672" # Management UI
+    volumes:
+      - rabbitmq3_data:/var/lib/rabbitmq
+      - ./rabbitmq_enabled_plugins:/etc/rabbitmq/enabled_plugins
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=DISTRIBUTED_RABBITMQ_COOKIE
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - rabbitmq1
+    command: >
+      bash -c "
+        sleep 20;
+        rabbitmq-server &
+        sleep 10;
+        rabbitmqctl stop_app;
+        rabbitmqctl reset;
+        rabbitmqctl join_cluster rabbit@rabbitmq1;
+        rabbitmqctl start_app;
+        tail -f /dev/null
+      "
+
+  # HAProxy for load balancing RabbitMQ nodes
+  haproxy:
+    image: haproxy:2.8
+    container_name: haproxy
+    ports:
+      - "5670:5670" # AMQP balanced port
+      - "1936:1936" # HAProxy stats
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - rabbitmq1
+      - rabbitmq2
+      - rabbitmq3
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - rabbitmq1
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - prometheus
+      
+  # Order Producer Service
+  order_producer:
+    build:
+      context: .
+      dockerfile: Dockerfile-producer
+    container_name: order_producer
+    environment:
+      - RABBITMQ_HOST=haproxy
+      - RABBITMQ_PORT=5670
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=admin123
+      - PRODUCER_TYPE=order
+      - ORDER_RATE=5
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - haproxy
+
+  # Inventory Consumer Service
+  inventory_consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile-consumer
+    container_name: inventory_consumer
+    environment:
+      - RABBITMQ_HOST=haproxy
+      - RABBITMQ_PORT=5670
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=admin123
+      - CONSUMER_TYPE=inventory
+      - CONSUMER_INSTANCES=3
+      - PREFETCH_COUNT=10
+    networks:
+      - rabbitmq_network
+    depends_on:
+      - haproxy
+      - order_producer
+
+networks:
+  rabbitmq_network:
+    driver: bridge
+
+volumes:
+  rabbitmq1_data:
+  rabbitmq2_data:
+  rabbitmq3_data:
+  prometheus_data:
+  grafana_data:
