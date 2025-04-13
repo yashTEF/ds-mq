@@ -1,0 +1,3 @@
+pika
+pytest
+prometheus_client
