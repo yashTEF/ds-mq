@@ -90,6 +90,10 @@ class ConnectionManager:
                     else:
                         logger.error(f"Failed to connect after {config.CONNECTION_MAX_RETRIES} attempts")
                         raise ConnectionError(f"Could not connect to RabbitMQ at {self.host}:{self.port}") from e
+            
+            # This code should not be reached due to the exception above,
+            # but adding as a safeguard
+            raise ConnectionError(f"Failed to establish connection to RabbitMQ at {self.host}:{self.port}")
 
     def close_connection(self):
         """
