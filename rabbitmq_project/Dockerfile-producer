@@ -1,16 +1,13 @@
 FROM python:3.10-slim
 
 WORKDIR /app
+ENV PYTHONPATH=/app
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy full project code (ensuring the directory structure is preserved)
 COPY . .
 
-# Set Python path to include the project root
-ENV PYTHONPATH=/app
-
-# Start producer service
 CMD ["python", "-m", "rabbitmq_project.scripts.run_producer"]

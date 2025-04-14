@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # RabbitMQ Node 1 (Primary)
   rabbitmq1:
@@ -13,6 +11,8 @@ services:
     volumes:
       - rabbitmq1_data:/var/lib/rabbitmq
       - ./rabbitmq_enabled_plugins:/etc/rabbitmq/enabled_plugins
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      # - ./logs:/var/log/rabbitmq  # Mount logs directory
     environment:
       - RABBITMQ_ERLANG_COOKIE=DISTRIBUTED_RABBITMQ_COOKIE
       - RABBITMQ_DEFAULT_USER=admin
@@ -21,9 +21,19 @@ services:
       - rabbitmq_network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_running"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
+    command: >
+      bash -c "
+        mkdir -p /var/log/rabbitmq;
+        chmod 666 /etc/rabbitmq/enabled_plugins;
+        rabbitmq-server &
+        sleep 5;
+        rabbitmq-plugins enable rabbitmq_tracing;
+        rabbitmqctl trace_on;
+        tail -f /dev/null
+      "
 
   # RabbitMQ Node 2
   rabbitmq2:
@@ -36,6 +46,8 @@ services:
     volumes:
       - rabbitmq2_data:/var/lib/rabbitmq
       - ./rabbitmq_enabled_plugins:/etc/rabbitmq/enabled_plugins
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      # - ./logs:/var/log/rabbitmq  # Mount logs directory
     environment:
       - RABBITMQ_ERLANG_COOKIE=DISTRIBUTED_RABBITMQ_COOKIE
       - RABBITMQ_DEFAULT_USER=admin
@@ -46,13 +58,14 @@ services:
       - rabbitmq1
     command: >
       bash -c "
-        sleep 10;
+        mkdir -p /var/log/rabbitmq;
+        chmod 666 /etc/rabbitmq/enabled_plugins;
         rabbitmq-server &
-        sleep 10;
         rabbitmqctl stop_app;
         rabbitmqctl reset;
         rabbitmqctl join_cluster rabbit@rabbitmq1;
         rabbitmqctl start_app;
+        rabbitmqctl trace_on;
         tail -f /dev/null
       "
 
@@ -67,6 +80,8 @@ services:
     volumes:
       - rabbitmq3_data:/var/lib/rabbitmq
       - ./rabbitmq_enabled_plugins:/etc/rabbitmq/enabled_plugins
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      # - ./logs:/var/log/rabbitmq  # Mount logs directory
     environment:
       - RABBITMQ_ERLANG_COOKIE=DISTRIBUTED_RABBITMQ_COOKIE
       - RABBITMQ_DEFAULT_USER=admin
@@ -77,13 +92,14 @@ services:
       - rabbitmq1
     command: >
       bash -c "
-        sleep 20;
+        mkdir -p /var/log/rabbitmq;
+        chmod 666 /etc/rabbitmq/enabled_plugins;
         rabbitmq-server &
-        sleep 10;
         rabbitmqctl stop_app;
         rabbitmqctl reset;
         rabbitmqctl join_cluster rabbit@rabbitmq1;
         rabbitmqctl start_app;
+        rabbitmqctl trace_on;
         tail -f /dev/null
       "
 

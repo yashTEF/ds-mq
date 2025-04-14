@@ -69,7 +69,8 @@ class RetryHandler:
         # Bind dead-letter queue to exchange
         channel.queue_bind(
             queue=f"{self.dead_letter_exchange}.queue",
-            exchange=self.dead_letter_exchange
+            exchange=self.dead_letter_exchange,
+            routing_key='#'
         )
         
         logger.info("Retry and dead-letter exchanges/queues set up")

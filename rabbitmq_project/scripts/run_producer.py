@@ -35,8 +35,8 @@ except ImportError as e:
 # Configuration from environment variables
 RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'localhost')
 RABBITMQ_PORT = int(os.environ.get('RABBITMQ_PORT', 5672))
-RABBITMQ_USER = os.environ.get('RABBITMQ_USER', 'guest')
-RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', 'guest')
+RABBITMQ_USER = os.environ.get('RABBITMQ_USER', 'admin')
+RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', 'admin123')
 PRODUCER_TYPE = os.environ.get('PRODUCER_TYPE', 'order')
 ORDER_RATE = float(os.environ.get('ORDER_RATE', 1.0))  # Orders per second
 METRICS_PORT = int(os.environ.get('METRICS_PORT', 9091))
